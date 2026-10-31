@@ -50,10 +50,9 @@ jobs:
         run: ./build.sh
 
       - name: Build Tauri app
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
         run: npx tauri build
-
-      - name: Ad-hoc sign
-        run: codesign --force --deep --sign - src-tauri/target/release/bundle/macos/Excalidraw.app
 
       - name: Publish release
         env:
