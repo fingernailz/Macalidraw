@@ -1,0 +1,62 @@
+name: Sync Excalidraw and release
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.up.outputs.sha }}
+      short: ${{ steps.up.outputs.short }}
+      is_new: ${{ steps.up.outputs.is_new }}
+    steps:
+      - id: up
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git ls-remote https://github.com/excalidraw/excalidraw.git HEAD | cut -f1)
+          SHORT=${SHA:0:7}
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          if gh release view "upstream-$SHORT" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "is_new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.is_new == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install wrapper dependencies
+        run: npm install
+
+      - name: Build Excalidraw at upstream commit
+        env:
+          UPSTREAM_SHA: ${{ needs.check.outputs.sha }}
+        run: ./build.sh
+
+      - name: Build Tauri app
+        run: npx tauri build
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "upstream-${{ needs.check.outputs.short }}" \
+            src-tauri/target/release/bundle/dmg/*.dmg \
+            --title "Excalidraw ${{ needs.check.outputs.short }}" \
+            --notes "Built from https://github.com/excalidraw/excalidraw/commit/${{ needs.check.outputs.sha }}"
