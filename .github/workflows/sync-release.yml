@@ -52,6 +52,9 @@ jobs:
       - name: Build Tauri app
         run: npx tauri build
 
+      - name: Ad-hoc sign
+        run: codesign --force --deep --sign - src-tauri/target/release/bundle/macos/Excalidraw.app
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
